@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <title>CEFR Pro Checker - Hojiakbar</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        :root { --bg: #001f3f; --accent: #007bff; --glass: rgba(255,255,255,0.1); }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: white; transition: 0.5s; margin: 0; }
+        .container { max-width: 900px; margin: auto; padding: 20px; }
+        
+        /* Mavzular (Themes) */
+        .boy-theme { --bg: #001f3f; --accent: #00d4ff; }
+        .girl-theme { --bg: #2d0015; --accent: #ff4d94; }
+
+        .glass-card { 
+            background: var(--glass); backdrop-filter: blur(15px); 
+            padding: 25px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.2); 
+            margin-bottom: 25px; box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+
+        input, textarea { 
+            width: 100%; padding: 12px; margin: 10px 0; border-radius: 10px; 
+            border: none; background: rgba(255,255,255,0.9); color: #333; font-size: 16px; box-sizing: border-box;
+        }
+
+        button { 
+            background: var(--accent); color: white; padding: 15px; border: none; 
+            border-radius: 10px; cursor: pointer; width: 100%; font-weight: bold; font-size: 18px;
+        }
+
+        /* Splash Screen */
+        #splash { 
+            display: none; position: fixed; inset: 0; background: var(--bg); 
+            z-index: 9999; justify-content: center; align-items: center; text-align: center; 
+        }
+
+        /* Sertifikat uslubi */
+        #certificate-wrap {
+            display: none; width: 700px; background: white; color: #111;
+            padding: 50px; border: 15px double var(--bg); margin: 30px auto;
+            position: relative; text-align: center; font-family: 'Georgia', serif;
+        }
+        #cert-user-img { width: 130px; height: 160px; object-fit: cover; border: 3px solid #111; margin-bottom: 20px; }
+        #qr-code { position: absolute; bottom: 30px; right: 30px; }
+    </style>
+</head>
+<body class="boy-theme">
+
+    <div id="login" style="display:flex; height:100vh; align-items:center; justify-content:center;">
+        <div class="glass-card" style="width:400px; text-align:center;">
+            <h1>CEFR CHECKER</h1>
+            <input type="text" id="userName" placeholder="Ismingizni yozing...">
+            <button onclick="enterApp()">START</button>
+        </div>
+    </div>
+
+    <div id="splash">
+        <h1 style="font-size: 40px;">Muhammadiyev Hojiakbar <br> <span style="color:var(--accent)">CEFR Checker</span></h1>
+        <p>Yuklanmoqda...</p>
+    </div>
+
+    <div id="app" class="container" style="display:none;">
+        <h2 id="greet"></h2>
+
+        <div class="glass-card">
+            <h3>Task 1.1 (Formal Letter)</h3>
+            <input type="text" id="top11" placeholder="Mavzuni kiriting...">
+            <textarea id="ans11" placeholder="Writing yozing..."></textarea>
+        </div>
+
+        <div class="glass-card">
+            <h3>Task 1.2 (Informal Letter)</h3>
+            <input type="text" id="top12" placeholder="Mavzuni kiriting...">
+            <textarea id="ans12" placeholder="Writing yozing..."></textarea>
+        </div>
+
+        <div class="glass-card">
+            <h3>Task 2 (Essay)</h3>
+            <input type="text" id="top2" placeholder="Essay mavzusini kiriting...">
+            <textarea id="ans2" placeholder="Writing yozing..."></textarea>
+        </div>
+
+        <button onclick="sendToAI()">Natijani Hisoblash</button>
+
+        <div id="res-box" class="glass-card" style="display:none; margin-top:30px;">
+            <h2>Natija: <span id="s-score" style="color:lime"></span>/75</h2>
+            <p id="s-feedback"></p>
+            <hr>
+            <h3>Sertifikat uchun rasm yuklang:</h3>
+            <input type="file" id="userPhoto" accept="image/*">
+            <button onclick="showCertificate()" style="background:#6f42c1">Sertifikatni Berish</button>
+        </div>
+
+        <div id="certificate-wrap">
+            <img id="cert-img-tag" src="">
+            <h1>CERTIFICATE OF ACHIEVEMENT</h1>
+            <p>Ushbu sertifikat egasi</p>
+            <h2 id="cert-name-tag" style="font-size:35px; border-bottom: 2px solid #333;"></h2>
+            <p>Writing bo'limi bo'yicha quyidagi ballni qo'lga kiritdi:</p>
+            <h1 id="cert-score-tag" style="font-size:50px; color:var(--bg)"></h1>
+            <p>Sana: <span id="cert-date-tag"></span></p>
+            <div id="qr-code"></div>
+        </div>
+        <button id="download-btn" style="display:none; background:#ff8800; margin-bottom:50px;" onclick="downloadCert()">Sertifikatni Yuklab Olish (PNG)</button>
+    </div>
+
+    <script>
+        let uName = "";
+        let uScore = 0;
+
+        function enterApp() {
+            uName = document.getElementById('userName').value;
+            if(!uName) return alert("Ismni kiriting");
+
+            // Ismga qarab rang (Dinamik dizayn)
+            const nameLower = uName.toLowerCase();
+            if(nameLower.endsWith('a') || nameLower.endsWith('oza') || nameLower.endsWith('ira')) {
+                document.body.className = "girl-theme";
+            }
+
+            document.getElementById('login').style.display = 'none';
+            document.getElementById('splash').style.display = 'flex';
+            
+            setTimeout(() => {
+                document.getElementById('splash').style.display = 'none';
+                document.getElementById('app').style.display = 'block';
+                document.getElementById('greet').innerText = "Xush kelibsiz, " + uName + "!";
+            }, 5000);
+        }
+
+        async function sendToAI() {
+            alert("AI tahlil qilmoqda...");
+            // Real server manzilingizni bu yerga qo'yasiz
+            const response = await fetch('http://127.0.0.1:5000/evaluate', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    topic11: document.getElementById('top11').value,
+                    task11: document.getElementById('ans11').value,
+                    topic12: document.getElementById('top12').value,
+                    task12: document.getElementById('ans12').value,
+                    topic2: document.getElementById('top2').value,
+                    task2: document.getElementById('ans2').value
+                })
+            });
+            const data = await response.json();
+            uScore = data.standard_score;
+            
+            document.getElementById('res-box').style.display = 'block';
+            document.getElementById('s-score').innerText = uScore;
+            document.getElementById('s-feedback').innerText = data.feedback;
+            window.scrollTo(0, document.body.scrollHeight);
+        }
+
+        function showCertificate() {
+            const photoInput = document.getElementById('userPhoto');
+            if(!photoInput.files[0]) return alert("Rasm tanlang!");
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById('certificate-wrap').style.display = 'block';
+                document.getElementById('download-btn').style.display = 'block';
+                document.getElementById('cert-img-tag').src = e.target.result;
+                document.getElementById('cert-name-tag').innerText = uName;
+                document.getElementById('cert-score-tag').innerText = uScore + " / 75";
+                document.getElementById('cert-date-tag').innerText = new Date().toLocaleDateString();
+
+                // QR Kod
+                document.getElementById('qr-code').innerHTML = "";
+                new QRCode(document.getElementById("qr-code"), {
+                    text: `ID: ${uName}-${uScore}-CEFR`,
+                    width: 90, height: 90
+                });
+            }
+            reader.readAsDataURL(photoInput.files[0]);
+        }
+
+        function downloadCert() {
+            const cert = document.getElementById('certificate-wrap');
+            html2canvas(cert, { useCORS: true }).then(canvas => {
+                const link = document.createElement('a');
+                link.download = `CEFR_Certificate_${uName}.png`;
+                link.href = canvas.toDataURL();
+                link.click();
+            });
+        }
+    </script>
+</body>
+</html>
